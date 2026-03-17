@@ -130,3 +130,27 @@ Remove Siri Shortcuts support, Spoon installation logic (if unneeded), test targ
 - [ ] Menubar icon appears, no console/preferences windows
 - [ ] hs.eventtap, hs.menubar, hs.notify, hs.http, hs.timer, hs.json, hs.styledtext all functional
 - [ ] Bundled init.lua and mouse_sentinel.lua copied to ~/.hammerspoon/ on first run
+
+---
+
+### Implementation Notes (completed 2026-03-14)
+
+**Build status:** BUILD SUCCEEDED (Debug config, xcodebuild CLI)
+
+**Steps 1-9 all completed.** Deviations from plan and issues encountered during build:
+
+1. **ASCIImage dependency in hs.image (Step 6 gap):** Removing the ASCIImage pod broke `extensions/image/libimage.m` which imported `ASCIImage/PARImage+ASCIIInput.h` and used `[NSImage imageWithASCIIRepresentation:...]`. Fix: removed the import and stubbed `imageWithContextFromASCII()` to return nil. The function registration in `corelib[]` was kept so `hs.image.imageFromASCII` returns nil instead of crashing.
+
+2. **`hs` CLI target (Step 5 gap):** The `hs` CLI target references `extensions/ipc/cli/hs.m` which was deleted with the ipc extension. The CLI is an IPC client and has no purpose without the ipc module. Fix: removed the `hs` target entirely.
+
+3. **Orphaned function declarations (Step 4 gap):** `HSUploadCrashData()`, `HSSetUploadCrashData()`, `PreferencesDarkModeEnabled()`, `PreferencesDarkModeSetEnabled()` were defined in the deleted `MJPreferencesWindowController.m`. Both `MJLua.m` and `MJAppDelegate.m` call them. Fix: moved implementations to `MJLua.m`, added declarations to `variables.h`.
+
+4. **Orphaned build phases:** "Compile docs.json", "Copy hsdocs Files", "Copy hsdocs minweb Files", "Copy hs manpage" phases referenced deleted files. Fix: removed these phases from the Xcode project.
+
+5. **Orphaned Xcode file references:** `HSChooserWindow.xib`, `lua.json`, `httpserver/timeout3`, and various deleted source files were still referenced in the project. Fix: cleaned via xcodeproj gem script.
+
+6. **Bundled config file paths (Step 8):** Plan specified `Hammerspoon/Resources/` but that directory doesn't exist. Files placed at `Hammerspoon/default_init.lua` and `Hammerspoon/mouse_sentinel.lua` directly, added to Xcode via the Hammerspoon group.
+
+**Remaining targets (26):** Hammerspoon, application, applicationwatcher, crash, drawing_color, eventtap, eventtapevent, fs, fsvolume, fsxattr, host, host_locale, http, image, json, keycodes, math, menubar, notify, screen, screenwatcher, styledtext, timer, uielement, uielementwatcher, window
+
+**Remaining pods (3):** CocoaLumberjack, Sentry, Sparkle

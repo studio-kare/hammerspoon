@@ -165,8 +165,6 @@ coroutine.applicationYield = hs.coroutineApplicationYield
     hs._notify("Hammerspoon error") -- undecided on this line
     --  print(traceback())
     print("*** ERROR: "..err)
-    hs.focus()
-    hs.openConsole()
   end
 
   function hs.assert(pred,desc,data)
@@ -175,30 +173,6 @@ coroutine.applicationYield = hs.coroutineApplicationYield
   https://github.com/Hammerspoon/hammerspoon/issues/new   and paste the following stack trace:
 
   Assertion failed: ]]..desc..'\n'..(data and hs.inspect(data) or ''),2)
-    end
-  end
-
---- hs.toggleConsole()
---- Function
---- Toggles the visibility of the console
----
---- Parameters:
----  * None
----
---- Returns:
----  * None
----
---- Notes:
----  * If the console is not currently open, it will be opened. If it is open and not the focused window, it will be brought forward and focused.
----  * If the console is focused, it will be closed.
-  function hs.toggleConsole()
-    local console = hs.appfinder.windowFromWindowTitle("Hammerspoon Console")
-    if console and (console ~= hs.window.focusedWindow()) then
-      console:focus()
-    elseif console then
-      console:close()
-    else
-      hs.openConsole()
     end
   end
 
@@ -257,26 +231,6 @@ coroutine.applicationYield = hs.coroutineApplicationYield
     local s = f:read('*a')
     local status, exit_type, rc = f:close()
     return s, status, exit_type, rc
-  end
-
---- hs.dockIcon([state]) -> bool
---- Function
---- Set or display whether or not the Hammerspoon dock icon is visible.
----
---- Parameters:
----  * state - an optional boolean which will set whether or not the Hammerspoon dock icon should be visible.
----
---- Returns:
----  * True if the icon is currently set (or has just been) to be visible or False if it is not.
----
---- Notes:
----  * This function is a wrapper to functions found in the `hs.dockicon` module, but is provided here to provide an interface consistent with other selectable preference items.
-  hs.dockIcon = function(value)
-    local hsdi = require("hs.dockicon")
-    if type(value) == "boolean" then
-      if value then hsdi.show() else hsdi.hide() end
-    end
-    return hsdi.visible()
   end
 
 --- hs.loadSpoon(name[, global]) -> Spoon object
@@ -352,15 +306,6 @@ coroutine.applicationYield = hs.coroutineApplicationYield
         _G["spoon"][name] = obj
       end
 
-      -- If the Spoon has docs, load them
-      if obj.spoonPath then
-        local docsPath = obj.spoonPath.."/docs.json"
-        local fs = require("hs.fs")
-        if fs.attributes(docsPath) then
-          local doc = require("hs.doc")
-          doc.registerJSONFile(docsPath, true)
-        end
-      end
     end
 
     -- Return the Spoon object
@@ -386,51 +331,8 @@ coroutine.applicationYield = hs.coroutineApplicationYield
 ---    * the identifier `lua._man` provides the table of contents for the Lua 5.3 manual.  You can pull up a specific section of the lua manual by including the chapter (and subsection) like this: `lua._man._3_4_8`.
 ---    * the identifier `lua._C` will provide information specifically about the Lua C API for use when developing modules which require external libraries.
 
-  hs.help = require("hs.doc")
+  hs.help = function() print("hs.help is not available in this build") end
   help = hs.help -- luacheck: ignore
-
-
---- hs.hsdocs([identifier])
---- Function
---- Display's Hammerspoon API documentation in a webview browser.
----
---- Parameters:
----  * identifier - An optional string containing the signature of some part of Hammerspoon's API (e.g. `"hs.reload"`).  If no string is provided, then the table of contents for the Hammerspoon documentation is displayed.
----
---- Returns:
----  * None
----
---- Notes:
----  * You can also access the results of this function by the following methods from the console:
----    * hs.hsdocs.identifier.path -- no quotes are required, e.g. `hs.hsdocs.hs.reload`
----  * See `hs.doc.hsdocs` for more information about the available settings for the documentation browser.
----  * This function provides documentation for Hammerspoon modules, functions, and methods similar to the Hammerspoon Dash docset, but does not require any additional software.
----  * This currently only provides documentation for the built in Hammerspoon modules, functions, and methods.  The Lua documentation and third-party modules are not presently supported, but may be added in a future release.
-  local hsdocsMetatable
-  hsdocsMetatable = {
-    __index = function(self, key)
-      local label = (self.__node == "") and key or (self.__node .. "." .. key)
-      return setmetatable({ __action = self.__action, __node = label }, hsdocsMetatable)
-    end,
-
-    __call = function(self, ...)
-      if type(self.__action) == "function" then
-          return self.__action(self.__node, ...)
-      else
-          return self.__node
-      end
-    end,
-
-    __tostring = function(self) self.__action(self.__node) ; return self.__node end
-  }
-
-  hs.hsdocs = setmetatable({
-    __node = "",
-    __action = function(what)
-        local hsdocs = require("hs.doc.hsdocs")
-        hsdocs.help((what ~= "") and what or nil)
-    end
-  }, hsdocsMetatable)
 
   --setup lazy loading
   if autoload_extensions then
@@ -651,12 +553,6 @@ coroutine.applicationYield = hs.coroutineApplicationYield
 
   local hscrash = require("hs.crash")
 
-  -- These three modules are so tightly coupled that we will unconditionally preload them
-  require("hs.libapplication")
-  require("hs.uielement")
-  require("hs.window")
-  require("hs.application")
-
   rawrequire = require
   require = function(modulename) -- luacheck: ignore
     local result = rawrequire(modulename)
@@ -681,38 +577,9 @@ coroutine.applicationYield = hs.coroutineApplicationYield
       --  end
       --end
 
-      if string.sub(modulename, 1, 8) == "mjolnir." then
-        -- Reasonably certain that we're dealing with a Mjolnir module
-        local mjolnirmod = string.sub(modulename, 9, -1)
-        local mjolnirrep = {"application", "hotkey", "screen", "geometry", "fnutils", "keycodes", "alert", "cmsj.appfinder", "_asm.ipc", "_asm.modal_hotkey", "_asm.settings", "7bits.mjomatic", "_asm.eventtap.event", "_asm.timer", "_asm.pathwatcher", "_asm.eventtap", "_asm.notify", "lb.itunes", "_asm.utf8_53", "cmsj.caffeinate", "lb.spotify", "_asm.sys.mouse", "_asm.sys.battery", "_asm.ui.sound", "_asm.data.base64", "_asm.data.json"}
-        for _,v in pairs(mjolnirrep) do
-          if v == mjolnirmod then
-            hscrash.crashKV("MjolnirModuleLoaded", "YES")
-            break
-          end
-        end
-      end
     end)
     return result
   end
-
-  -- Set up the default Console toolbar
---- hs.console.defaultToolbar
---- Constant
---- Default toolbar for the Console window
----
---- Notes:
----  * This is an `hs.toolbar` object that is shown by default in the Hammerspoon Console
----  * You can remove this toolbar by adding `hs.console.toolbar(nil)` to your config, or you can replace it with your own `hs.webview.toolbar` object
-  local toolbar = require("hs.webview.toolbar")
-  local console = require("hs.console")
-  local image = require("hs.image")
-  console.defaultToolbar = toolbar.new("Console Default", {
-    { id="prefs", label="Preferences", image=image.imageFromName("NSPreferencesGeneral"), tooltip="Open Preferences", fn=function() hs.openPreferences() end },
-    { id="reload", label="Reload config", image=image.imageFromName("NSSynchronize"), tooltip="Reload configuration", fn=function() hs.reload() end },
-    { id="help", label="Help", image=image.imageFromName("NSInfo"), tooltip="Open API docs browser", fn=function() hs.doc.hsdocs.help() end }
-  }):canCustomize(true):autosaves(true)
-  console.toolbar(console.defaultToolbar)
 
   hscrash.crashLog("Loaded from: "..modpath)
 

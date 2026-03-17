@@ -10,3 +10,8 @@
 #define HSPreferencesDarkModeKey     @"HSPreferencesDarkModeKey"
 
 extern NSString* MJConfigFile;
+
+BOOL HSUploadCrashData(void);
+void HSSetUploadCrashData(BOOL uploadCrashData);
+BOOL PreferencesDarkModeEnabled(void);
+void PreferencesDarkModeSetEnabled(BOOL enabled);

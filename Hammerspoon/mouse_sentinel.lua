@@ -1,0 +1,2 @@
+-- mouse_sentinel: placeholder module
+-- Configure your mouse automation here
