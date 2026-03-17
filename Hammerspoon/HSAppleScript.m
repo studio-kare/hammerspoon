@@ -9,8 +9,6 @@
 #import "HSAppleScript.h"
 #import "MJLua.h"
 #import "variables.h"
-#import "MJConsoleWindowController.h"
-#import "MJPreferencesWindowController.h"
 #import "MJDockIcon.h"
 
 //

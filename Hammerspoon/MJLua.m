@@ -1,13 +1,10 @@
 #import "MJLua.h"
-#import "MJConsoleWindowController.h"
 #import "MJUserNotificationManager.h"
 #import "MJConfigUtils.h"
 #import "MJAccessibilityUtils.h"
 #import "variables.h"
 #import <pthread.h>
 #import "MJMenuIcon.h"
-#import "MJPreferencesWindowController.h"
-#import "MJConsoleWindowController.h"
 #import "MJAutoLaunch.h"
 #import "MJDockIcon.h"
 #import "HSAppleScript.h"
@@ -26,9 +23,19 @@
 #import <sys/types.h>
 #import <sys/sysctl.h>
 
-@interface MJPreferencesWindowController ()
-- (void) reflectDefaults ;
-@end
+// Functions previously in MJPreferencesWindowController (deleted)
+BOOL HSUploadCrashData(void) {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:HSUploadCrashDataKey];
+}
+void HSSetUploadCrashData(BOOL uploadCrashData) {
+    [[NSUserDefaults standardUserDefaults] setBool:uploadCrashData forKey:HSUploadCrashDataKey];
+}
+BOOL PreferencesDarkModeEnabled(void) {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:HSPreferencesDarkModeKey];
+}
+void PreferencesDarkModeSetEnabled(BOOL enabled) {
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:HSPreferencesDarkModeKey];
+}
 
 //  static LuaSkin* MJLuaState; // we can no longer trust that this points to the correct thread -- get it anew as needed
 static HSLogger* MJLuaLogDelegate;
@@ -109,8 +116,7 @@ static int core_menuicon(lua_State* L) {
 /// Returns:
 ///  * True if the console is currently set (or has just been) to be always on top when visible or False if it is not.
 static int core_consoleontop(lua_State* L) {
-    if (lua_isboolean(L, 1)) { MJConsoleWindowSetAlwaysOnTop(lua_toboolean(L, 1)); }
-    lua_pushboolean(L, MJConsoleWindowAlwaysOnTop()) ;
+    lua_pushboolean(L, false) ;
     return 1;
 }
 
@@ -139,9 +145,6 @@ static int core_openabout(lua_State* __unused L) {
 /// Returns:
 ///  * None
 static int core_openpreferences(lua_State* __unused L) {
-    [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
-    [[MJPreferencesWindowController singleton] showWindow: nil];
-
     return 0 ;
 }
 
@@ -155,7 +158,6 @@ static int core_openpreferences(lua_State* __unused L) {
 /// Returns:
 ///  * None
 static int core_closepreferences(lua_State* __unused L) {
-    [[MJPreferencesWindowController singleton].window orderOut:nil];
     return 0;
 }
 
@@ -168,10 +170,7 @@ static int core_closepreferences(lua_State* __unused L) {
 ///
 /// Returns:
 ///  * None
-static int core_openconsole(lua_State* L) {
-    if (!(lua_isboolean(L,1) && !lua_toboolean(L, 1)))
-        [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
-    [[MJConsoleWindowController singleton] showWindow: nil];
+static int core_openconsole(lua_State* L __unused) {
     return 0;
 }
 
@@ -184,8 +183,7 @@ static int core_openconsole(lua_State* L) {
 ///
 /// Returns:
 ///  * None
-static int core_closeconsole(lua_State* L) {
-    [[MJConsoleWindowController singleton].window orderOut:nil];
+static int core_closeconsole(lua_State* L __unused) {
     return 0;
 }
 
@@ -664,7 +662,6 @@ static int preferencesDarkMode(lua_State* L) {
 
     if (lua_isboolean(L, 1)) {
         PreferencesDarkModeSetEnabled(lua_toboolean(L, 1));
-        [[MJPreferencesWindowController singleton] reflectDefaults] ;
     }
 
     lua_pushboolean(L, PreferencesDarkModeEnabled()) ;
@@ -790,6 +787,7 @@ static int core_exit(lua_State* L) {
 static int core_logmessage(lua_State* L) {
     size_t len;
     const char* s = lua_tolstring(L, 1, &len);
+    if (!s) { s = "(nil)"; len = 5; }
     NSString* str = [[NSString alloc] initWithData:[NSData dataWithBytes:s length:len] encoding:NSUTF8StringEncoding];
     if (str == nil) {
       core_cleanUTF8(L) ;
@@ -804,9 +802,7 @@ static int core_notify(lua_State* L) {
     size_t len;
     const char* s = lua_tolstring(L, 1, &len);
     NSString* str = [[NSString alloc] initWithData:[NSData dataWithBytes:s length:len] encoding:NSUTF8StringEncoding];
-    [[MJUserNotificationManager sharedManager] sendNotification:str handler:^{
-        [[MJConsoleWindowController singleton] showWindow: nil];
-    }];
+    [[MJUserNotificationManager sharedManager] sendNotification:str handler:^{}];
     return 0;
 }
 
@@ -846,6 +842,9 @@ static luaL_Reg corelib[] = {
 
 // Create and configure a Lua environment
 void MJLuaCreate(void) {
+    MJLuaSetupLogHandler(^(NSString* str){
+        NSLog(@"%@", str);
+    });
     MJLuaAlloc();
     MJLuaInit();
     HSNSLOG(@"Created Lua instance");
@@ -862,7 +861,6 @@ void MJLuaDestroy(void) {
 void MJLuaReplace(void) {
     MJLuaDeinit();
     MJLuaDealloc();
-    [[MJConsoleWindowController singleton] initializeConsoleColorsAndFont] ;
 
     MJLuaAlloc();
     MJLuaInit();
@@ -924,7 +922,8 @@ void MJLuaInit(void) {
     lua_pushstring(L, [MJConfigFile UTF8String]);
     lua_pushstring(L, [MJConfigFileFullPath() UTF8String]);
     lua_pushstring(L, [MJConfigDir() UTF8String]);
-    lua_pushstring(L, [[[NSBundle mainBundle] pathForResource:@"docs" ofType:@"json"] fileSystemRepresentation]);
+    NSString *docsPath = [[NSBundle mainBundle] pathForResource:@"docs" ofType:@"json"];
+    lua_pushstring(L, docsPath ? [docsPath fileSystemRepresentation] : "");
     lua_pushboolean(L, [[NSFileManager defaultManager] fileExistsAtPath: MJConfigFileFullPath()]);
     lua_pushboolean(L, [[NSUserDefaults standardUserDefaults] boolForKey:HSAutoLoadExtensions]);
 

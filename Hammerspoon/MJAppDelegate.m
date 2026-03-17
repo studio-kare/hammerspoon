@@ -1,7 +1,5 @@
 #import <Cocoa/Cocoa.h>
 #import "MJAppDelegate.h"
-#import "MJConsoleWindowController.h"
-#import "MJPreferencesWindowController.h"
 #import "MJDockIcon.h"
 #import "MJMenuIcon.h"
 #import "MJLua.h"
@@ -21,9 +19,6 @@
 
 - (BOOL) applicationShouldHandleReopen:(NSApplication*)theApplication hasVisibleWindows:(BOOL)hasVisibleWindows {
     callDockIconCallback();
-    if (HSOpenConsoleOnDockClickEnabled()) {
-        [[MJConsoleWindowController singleton] showWindow: nil];
-    };
     return NO;
 }
 
@@ -44,17 +39,6 @@
 {
     self.startupEvent = event;
 }
-
-#ifndef NO_INTENTS
-- (id)application:(NSApplication *)application handlerForIntent:(INIntent *)intent  API_AVAILABLE(macos(11.0)){
-    NSLog(@"handlerForIntent: Checking for HSExecuteLuaIntent");
-    if ([intent isKindOfClass:[HSExecuteLuaIntent class]]) {
-        NSLog(@"handlerForIntent: Found HSExecuteLuaIntent, dispatching to HSExecuteLuaIntentHandler");
-        return ([[HSExecuteLuaIntentHandler alloc] init]);
-    }
-    return nil;
-}
-#endif
 
 - (BOOL)application:(NSApplication *)theApplication openFile:(NSString *)fileAndPath {
     NSString *typeOfFile = [[NSWorkspace sharedWorkspace] typeOfFile:fileAndPath error:nil];
@@ -211,7 +195,6 @@
             NSLog(@"UI testing init.lua");
         }
         MJConfigFile = [[NSFileManager defaultManager] stringWithFileSystemRepresentation:fsPath length:strlen(fsPath)];
-        [self showConsoleWindow:nil];
     } else {
         // No test environment detected, this is a live user run
         NSString* userMJConfigFile = [[NSUserDefaults standardUserDefaults] stringForKey:@"MJConfigFile"];
@@ -242,23 +225,35 @@
     MJEnsureDirectoryExists(MJConfigDir());
     [[NSFileManager defaultManager] changeCurrentDirectoryPath:MJConfigDir()];
 
+    // Copy bundled config files on first run
+    {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *configDir = MJConfigDirAbsolute();
+        NSArray *bundledFiles = @[@"default_init.lua", @"mouse_sentinel.lua"];
+        for (NSString *filename in bundledFiles) {
+            NSString *dstPath;
+            if ([filename isEqualToString:@"default_init.lua"]) {
+                dstPath = [configDir stringByAppendingPathComponent:@"init.lua"];
+            } else {
+                dstPath = [configDir stringByAppendingPathComponent:filename];
+            }
+            if (![fm fileExistsAtPath:dstPath]) {
+                NSString *srcPath = [[NSBundle mainBundle] pathForResource:[filename stringByDeletingPathExtension] ofType:@"lua"];
+                if (srcPath) {
+                    [fm copyItemAtPath:srcPath toPath:dstPath error:nil];
+                    NSLog(@"Copied bundled %@ to %@", filename, dstPath);
+                }
+            }
+        }
+    }
+
     [self registerDefaultDefaults];
 
     // Enable Sentry, if we have an API URL available
 #ifdef SENTRY_API_URL
     if (HSUploadCrashData() && !isTesting) {
-        SentryEvent* (^sentryWillUploadCrashReport) (SentryEvent *event) = ^SentryEvent* (SentryEvent *event) {
-            if ([event.extra objectForKey:@"MjolnirModuleLoaded"]) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                   [self showMjolnirMigrationNotification];
-                });
-            }
-            return event;
-        };
-
         [SentrySDK startWithConfigureOptions:^(SentryOptions *options) {
             options.dsn = @SENTRY_API_URL;
-            options.beforeSend = sentryWillUploadCrashReport;
             options.releaseName = NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"];
             options.enableAppHangTracking = NO;
             options.debug = YES; // Enabled debug when first installing is always helpful
@@ -287,11 +282,7 @@
 
     MJMenuIconSetup(self.menuBarMenu);
     MJDockIconSetup();
-    [[MJConsoleWindowController singleton] setup];
     MJLuaCreate();
-
-    if (!MJAccessibilityIsEnabled())
-        [[MJPreferencesWindowController singleton] showWindow: nil];
 }
 
 // Dragging & Dropping of Text to Dock Item
@@ -324,7 +315,7 @@
     [[NSUserDefaults standardUserDefaults]
      registerDefaults: @{@"NSApplicationCrashOnExceptions": @YES,
                          MJShowDockIconKey: @NO,
-                         MJShowMenuIconKey: @YES,
+                         MJShowMenuIconKey: @NO,
                          HSAutoLoadExtensions: @YES,
                          HSUploadCrashDataKey: @YES,
                          HSAppleScriptEnabledKey: @NO,
@@ -336,16 +327,6 @@
 
 - (IBAction) reloadConfig:(id)sender {
     MJLuaReplace();
-}
-
-- (IBAction) showConsoleWindow:(id)sender {
-    [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
-    [[MJConsoleWindowController singleton] showWindow: nil];
-}
-
-- (IBAction) showPreferencesWindow:(id)sender {
-    [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
-    [[MJPreferencesWindowController singleton] showWindow: nil];
 }
 
 - (IBAction) showAboutPanel:(id)sender {
@@ -375,15 +356,6 @@
         // No app is associated with .lua files, so fall back on TextEdit
         [workspace openFile:path withApplication:@"TextEdit" andDeactivate:YES];
     }
-}
-
-- (void)showMjolnirMigrationNotification {
-    NSAlert *alert = [[NSAlert alloc] init];
-    [alert addButtonWithTitle:@"OK"];
-    [alert setMessageText:@"Hammerspoon crash detected"];
-    [alert setInformativeText:@"Your init.lua is loading Mjolnir modules and a previous launch crashed.\n\nHammerspoon ships with updated versions of many of the Mjolnir modules, with both new features and many bug fixes.\n\nPlease consult our API documentation and migrate your config."];
-    [alert setAlertStyle:NSAlertStyleCritical];
-    [alert runModal];
 }
 
 #pragma mark - Sparkle delegate methods

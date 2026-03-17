@@ -36,12 +36,6 @@
                                     <action selector="checkForUpdates:" target="9hz-Cm-Er1" id="sY1-SF-eDC"/>
                                 </connections>
                             </menuItem>
-                            <menuItem isSeparatorItem="YES" id="VOq-y0-SEH"/>
-                            <menuItem title="Preferences…" keyEquivalent="," id="9Kc-1f-Fv2">
-                                <connections>
-                                    <action selector="showPreferencesWindow:" target="Voe-Tx-rLC" id="AdW-ZP-V8p"/>
-                                </connections>
-                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="wFC-TO-SCJ"/>
                             <menuItem title="Services" id="NMo-om-nkz">
                                 <modifierMask key="keyEquivalentModifierMask"/>
@@ -85,12 +79,6 @@
                             <menuItem title="Open Config" keyEquivalent="o" id="gTe-IJ-37j">
                                 <connections>
                                     <action selector="openConfig:" target="Voe-Tx-rLC" id="BnO-mw-Wbz"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem isSeparatorItem="YES" id="m54-Is-iLE"/>
-                            <menuItem title="Console..." keyEquivalent="r" id="8rK-CR-NrT">
-                                <connections>
-                                    <action selector="showConsoleWindow:" target="Voe-Tx-rLC" id="crn-jm-3G0"/>
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="aJh-i4-bef"/>
@@ -384,19 +372,6 @@
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <connections>
                         <action selector="openConfig:" target="Voe-Tx-rLC" id="HP4-um-M1o"/>
-                    </connections>
-                </menuItem>
-                <menuItem isSeparatorItem="YES" id="C3i-ao-hBZ"/>
-                <menuItem title="Console..." id="kQv-Ke-mdZ">
-                    <modifierMask key="keyEquivalentModifierMask"/>
-                    <connections>
-                        <action selector="showConsoleWindow:" target="Voe-Tx-rLC" id="1wg-Dg-jnP"/>
-                    </connections>
-                </menuItem>
-                <menuItem title="Preferences..." id="RGq-yR-Y0Q">
-                    <modifierMask key="keyEquivalentModifierMask"/>
-                    <connections>
-                        <action selector="showPreferencesWindow:" target="Voe-Tx-rLC" id="0WV-v0-6Fl"/>
                     </connections>
                 </menuItem>
                 <menuItem isSeparatorItem="YES" id="47L-wL-Aut"/>
