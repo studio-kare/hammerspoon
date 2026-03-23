@@ -49,16 +49,16 @@ M.config = {
 	menubar_idle_text = "🖱️ —",
 
 	-- CSV log path (set to nil to disable local logging)
-	log_path = os.getenv("HOME") .. "/.hammerspoon/mouse_sentinel.csv",
+	log_path = os.getenv("HOME") .. "/.mouse-sentinel/mouse_sentinel.csv",
 
 	-- Beeminder samples log (append-only, survives restarts)
-	samples_path = os.getenv("HOME") .. "/.hammerspoon/mouse_sentinel_samples.csv",
+	samples_path = os.getenv("HOME") .. "/.mouse-sentinel/mouse_sentinel_samples.csv",
 
 	-- Adaptive idle detection (set to true once you have data)
 	adaptive_idle = false,
 }
 
-local CONFIG_FILE = os.getenv("HOME") .. "/.hammerspoon/mouse_sentinel_config.json"
+local CONFIG_FILE = os.getenv("HOME") .. "/.mouse-sentinel/mouse_sentinel_config.json"
 local PERSISTED_KEYS = { "beeminder_user", "beeminder_token", "beeminder_goal" }
 
 -- ─────────────────────────────────────────────────
@@ -81,6 +81,7 @@ local menubar = nil
 local tick_timer = nil
 local mouse_tap = nil
 local kb_tap = nil
+local display_logs = false
 
 -- Beeminder: daily running mean of kb% snapshots (file-backed)
 local session_kb_episodes = 0
@@ -110,18 +111,24 @@ local function append_sample(kb_pct, kb_n, mouse_n, total)
 		f:write("date,timestamp,kb_pct,kb_episodes,mouse_episodes,total_episodes\n")
 	end
 
-	f:write(
-		string.format(
-			"%s,%s,%d,%d,%d,%d\n",
-			os.date("%Y-%m-%d"),
-			os.date("!%Y-%m-%dT%H:%M:%SZ"),
-			kb_pct,
-			kb_n,
-			mouse_n,
-			total
-		)
+	local line = string.format(
+		"%s,%s,%d,%d,%d,%d\n",
+		os.date("%Y-%m-%d"),
+		os.date("!%Y-%m-%dT%H:%M:%SZ"),
+		kb_pct,
+		kb_n,
+		mouse_n,
+		total
 	)
+	f:write(line)
 	f:close()
+
+	if display_logs then
+		print(string.format(
+			"[mouse_sentinel] sample saved: kb%%=%d  kb=%d  mouse=%d  total=%d",
+			kb_pct, kb_n, mouse_n, total
+		))
+	end
 end
 
 --- Load all kb_pct samples for a given date from the log file.
@@ -222,6 +229,16 @@ local function finalize_episode()
 		t = current_episode.last_t,
 		kind = current_episode.kind,
 	}
+
+	if display_logs then
+		local duration = current_episode.last_t - current_episode.start_t
+		print(string.format(
+			"[mouse_sentinel] episode: %s  duration=%.1fs  buffer_size=%d",
+			current_episode.kind,
+			duration,
+			#episode_buffer
+		))
+	end
 
 	-- Increment Beeminder cumulative counters
 	if current_episode.kind == "kb" then
@@ -466,6 +483,13 @@ local function build_menu()
 				end
 			end,
 		},
+		{
+			title = "Display logs: " .. (display_logs and "ON" or "OFF"),
+			fn = function()
+				display_logs = not display_logs
+				print("[mouse_sentinel] Display logs: " .. (display_logs and "ON" or "OFF"))
+			end,
+		},
 		{ title = "-" },
 		{
 			title = "Session total: " .. session_kb_episodes .. " kb, " .. session_mouse_episodes .. " mouse",
@@ -708,6 +732,18 @@ local function tick()
 	-- Adaptive threshold: re-fit every ~30 seconds
 	if M.config.adaptive_idle and tick_count % 15 == 0 then
 		update_adaptive_threshold()
+	end
+
+	-- Log ratio on tick (every ~30s to avoid spam)
+	if display_logs and tick_count % 15 == 0 then
+		local ratio, total, mouse_n = compute_ratio()
+		if ratio then
+			local kb_n = total - mouse_n
+			print(string.format(
+				"[mouse_sentinel] tick: mouse%%=%d  kb=%d  mouse=%d  total=%d  idle=%s",
+				math.floor(ratio * 100), kb_n, mouse_n, total, tostring(is_idle)
+			))
+		end
 	end
 
 	-- CSV log every 5 minutes
